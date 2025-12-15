@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react'
-import { Upload as UploadIcon, File, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Upload as UploadIcon, File, X, CheckCircle, AlertCircle, Loader2, Server } from 'lucide-react'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://meeting-api.bangbangnguyen2610.workers.dev'
+const API_URL = 'http://localhost:8000'
 
 export default function Upload() {
   const [dragActive, setDragActive] = useState(false)
@@ -11,6 +11,22 @@ export default function Upload() {
   const [status, setStatus] = useState(null) // 'success' | 'error' | null
   const [message, setMessage] = useState('')
   const [meetingTitle, setMeetingTitle] = useState('')
+  const [serverOnline, setServerOnline] = useState(false)
+
+  // Check if local server is running
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        const res = await fetch(`${API_URL}/`, { method: 'GET' })
+        setServerOnline(res.ok)
+      } catch {
+        setServerOnline(false)
+      }
+    }
+    checkServer()
+    const interval = setInterval(checkServer, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -69,6 +85,12 @@ export default function Upload() {
   const handleUpload = async () => {
     if (!file) return
 
+    if (!serverOnline) {
+      setStatus('error')
+      setMessage('Local server chưa chạy. Hãy chạy: python local_server.py')
+      return
+    }
+
     setUploading(true)
     setProgress(10)
     setStatus(null)
@@ -92,7 +114,7 @@ export default function Upload() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Upload thất bại')
+        throw new Error(result.error || result.detail || 'Upload thất bại')
       }
 
       setProgress(100)
@@ -132,6 +154,25 @@ export default function Upload() {
       </div>
 
       <div className="max-w-2xl">
+        {/* Server Status */}
+        <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
+          serverOnline
+            ? 'bg-green-500/10 border border-green-500/20'
+            : 'bg-red-500/10 border border-red-500/20'
+        }`}>
+          <Server className={`w-5 h-5 ${serverOnline ? 'text-green-400' : 'text-red-400'}`} />
+          <div>
+            <p className={serverOnline ? 'text-green-400' : 'text-red-400'}>
+              {serverOnline ? 'Local Server đang chạy' : 'Local Server offline'}
+            </p>
+            {!serverOnline && (
+              <p className="text-slate-500 text-sm mt-1">
+                Chạy lệnh: <code className="bg-slate-800 px-2 py-0.5 rounded">python local_server.py</code>
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Title Input */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -181,7 +222,7 @@ export default function Upload() {
                 hoặc click để chọn file
               </p>
               <p className="text-slate-500 text-sm">
-                Hỗ trợ: MP4, WebM, MOV, MP3, WAV, M4A (tối đa 500MB)
+                Hỗ trợ: MP4, WebM, MOV, MP3, WAV, M4A (không giới hạn dung lượng)
               </p>
             </div>
           ) : (
@@ -244,7 +285,7 @@ export default function Upload() {
         {/* Upload Button */}
         <button
           onClick={handleUpload}
-          disabled={!file || uploading}
+          disabled={!file || uploading || !serverOnline}
           className="mt-6 w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600
                      text-white font-medium transition-all disabled:opacity-50
                      disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
@@ -266,8 +307,7 @@ export default function Upload() {
         <div className="mt-8 p-4 rounded-xl bg-slate-800/50 border border-white/10">
           <h4 className="text-white font-medium mb-2">Quy trình xử lý:</h4>
           <ol className="text-slate-400 text-sm space-y-1 list-decimal list-inside">
-            <li>Upload file lên server</li>
-            <li>Chuyển đổi video sang audio (nếu cần)</li>
+            <li>Upload file lên local server</li>
             <li>Gemini AI transcribe nội dung</li>
             <li>Tạo tóm tắt tự động</li>
             <li>Lưu vào database</li>
